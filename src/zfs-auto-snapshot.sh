@@ -154,6 +154,7 @@ do_snapshots () # properties, flags, snapname, oldglob, [targets...]
 	local TARGETS="$5"
 	local KEEP=''
 	local RUNSNAP=1
+	local keep_custom=''
 
 	# global DESTRUCTION_COUNT
 	# global SNAPSHOT_COUNT
@@ -194,10 +195,19 @@ do_snapshots () # properties, flags, snapname, oldglob, [targets...]
 			fi
 		fi
 
-		# Retain at most $opt_keep number of old snapshots of this filesystem,
-		# including the one that was just recently created.
-		test -z "$opt_keep" && continue
-		KEEP="$opt_keep"
+		# Check if there is a custom number of snapshots to keep for this target
+	  keep_custom=$(zfs get -H -o value com.sun:auto-snapshot:keep:"$opt_label" "$ii");
+
+	  if test "$keep_custom" != "-" && test "$keep_custom" -gt 0
+		then
+		  KEEP="$keep_custom"
+		  print_log info "Custom keep: Destroying all but the newest $keep_custom snapshots for $ii."
+		else
+		  # Retain at most $opt_keep number of old snapshots of this filesystem,
+			# including the one that was just recently created.
+			test -z "$opt_keep" && continue
+			KEEP="$opt_keep"
+		fi
 
 		# ASSERT: The old snapshot list is sorted by increasing age.
 		for jj in $SNAPSHOTS_OLD
