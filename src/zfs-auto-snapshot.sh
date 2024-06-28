@@ -43,6 +43,7 @@ opt_pre_snapshot=''
 opt_post_snapshot=''
 opt_do_snapshots=1
 opt_min_size=0
+opt_changed=0
 
 # Global summary statistics.
 DESTRUCTION_COUNT='0'
@@ -57,6 +58,7 @@ print_usage ()
 {
 	echo "Usage: $0 [options] [-l label] <'//' | name [name...]>
   --default-exclude  Exclude datasets if com.sun:auto-snapshot is unset.
+  -c, --changed      Snap only if data written > 0.
   -d, --debug        Print debugging messages.
   -e, --event=EVENT  Set the com.sun:auto-snapshot-desc property to EVENT.
       --fast         Use a faster zfs list invocation.
@@ -165,9 +167,9 @@ do_snapshots () # properties, flags, snapname, oldglob, [targets...]
 	do
                 # Check if size check is > 0
                 size_check_skip=0
+                bytes_written=`zfs get -Hp -o value written $ii`
                 if [ "$opt_min_size" -gt 0 ]
                 then
-                        bytes_written=`zfs get -Hp -o value written $ii`
                         kb_written=$(( $bytes_written / 1024 ))
                         if [ "$kb_written" -lt "$opt_min_size" ]
                         then
@@ -177,6 +179,19 @@ do_snapshots () # properties, flags, snapname, oldglob, [targets...]
                                         echo "Skipping target $ii, only $kb_written kB written since last snap. opt_min_size is $opt_min_size"
                                 fi
                         fi
+                fi
+
+                # Force check if data changed
+                if [ "$opt_changed" -eq 1 ]
+                then
+                       if [ "$bytes_written" -eq 0 ]
+                       then
+                               size_check_skip=1
+                               if [ -n "$opt_verbose" ]
+                               then
+                                        echo "Skipping target $ii, 0 bytes written since last snap."
+                               fi
+                       fi
                 fi
 
                 if [ -n "$opt_do_snapshots" -a "$size_check_skip" -eq 0 ]
@@ -210,23 +225,25 @@ do_snapshots () # properties, flags, snapname, oldglob, [targets...]
 		fi
 
 		# ASSERT: The old snapshot list is sorted by increasing age.
-		for jj in $SNAPSHOTS_OLD
-		do
-			# Check whether this is an old snapshot of the filesystem.
-			if [ -z "${jj#$ii@$GLOB}" ]
-			then
-				KEEP=$(( $KEEP - 1 ))
-				if [ "$KEEP" -le '0' ]
+		if [ "$size_check_skip" -eq 0 ]; then  # if skip creating snapshots, then skip deleting old ones also
+			for jj in $SNAPSHOTS_OLD
+			do
+				# Check whether this is an old snapshot of the filesystem.
+				if [ -z "${jj#$ii@$GLOB}" ]
 				then
-					if do_run "zfs destroy -d $FLAGS '$jj'"
+					KEEP=$(( $KEEP - 1 ))
+					if [ "$KEEP" -le '0' ]
 					then
-						DESTRUCTION_COUNT=$(( $DESTRUCTION_COUNT + 1 ))
-					else
-						WARNING_COUNT=$(( $WARNING_COUNT + 1 ))
+						if do_run "zfs destroy -d $FLAGS '$jj'"
+						then
+							DESTRUCTION_COUNT=$(( $DESTRUCTION_COUNT + 1 ))
+						else
+							WARNING_COUNT=$(( $WARNING_COUNT + 1 ))
+						fi
 					fi
 				fi
-			fi
-		done
+			done
+		fi
 	done
 }
 
@@ -246,7 +263,7 @@ GETOPT=$($GETOPT_BIN \
   --longoptions=debug,help,quiet,syslog,verbose \
   --longoptions=pre-snapshot:,post-snapshot:,destroy-only \
   --longoptions=min-size: \
-  --options=dnshe:l:k:p:rs:qgvm: \
+  --options=dnshe:l:k:p:rs:qgcvm: \
   -- "$@" ) \
   || exit 128
 
@@ -255,6 +272,10 @@ eval set -- "$GETOPT"
 while [ "$#" -gt '0' ]
 do
 	case "$1" in
+		(-c|--changed)
+			opt_changed=1
+			shift 1
+			;;
 		(-d|--debug)
 			opt_debug='1'
 			opt_quiet=''
