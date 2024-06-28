@@ -19,6 +19,9 @@ set to \fBfalse\fR.  This option reverses the behavior and requires
 \fB\-d\fR, \fB\-\-debug\fR
 Print debugging messages.
 .TP
+\fB\-c\fR, \fB\-\-changed\fR
+Only perform the snapshot if data has changed
+.TP
 \fB\-e\fR, \fB\-\-event\fR=\fIEVENT\fR
 Set the com.sun:auto\-snapshot\-desc property to EVENT.
 .TP
@@ -35,7 +38,7 @@ Do not snapshot filesystems in scrubbing pools.
 Print the usage message.
 .TP
 \fB\-k\fR, \fB\-\-keep\fR=\fINUM\fR
-Keep NUM recent snapshots and destroy older snapshots.
+Keep NUM recent snapshots and destroy older snapshots. This can also be managed individually for each filesystem by setting properties such as \fBcom.sun:auto-snapshot:keep:daily\fR to NUM snapshots to keep. 
 .TP
 \fB\-l\fR, \fB\-\-label\fR=\fILAB\fR
 LAB is usually 'hourly', 'daily', or 'monthly'.
